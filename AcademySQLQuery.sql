@@ -25,6 +25,10 @@ CREATE TABLE Students
 	GroupId INT FOREIGN KEY REFERENCES Groups(Id)
 )
 
+ALTER TABLE Students ADD CONSTRAINT DF_Students_Adulthood DEFAULT 0 FOR Adulthood;
+
+
+
 
 CREATE TABLE DeletedStudents
 (
@@ -46,6 +50,7 @@ AS
 SELECT * 
 FROM Academies
 
+SELECT * FROM VW_Academy
 
 CREATE VIEW VW_Group
 AS 
@@ -68,27 +73,95 @@ ON G.Id = GroupId
 JOIN Academies AS A
 ON A.Id = AcademyId
 
+SELECT * FROM VW_Student
+
 CREATE PROCEDURE UPS_GetGroupByName @name NVARCHAR(100)
 AS
 SELECT * FROM Groups
 WHERE @name = Name 
 
+EXEC UPS_GetGroupByName 'Sports Training'
 
-CREATE PROCEDURE UPS_GetStudentsByMinAge @age INT
+
+CREATE PROCEDURE UPS_GetStudentsAboveAge @age INT
 AS
 SELECT * FROM Students
-WHERE @age < Age
+WHERE Age >= @age
 
-CREATE PROCEDURE UPS_GetStudentsByMaxAge @age INT
+EXEC UPS_GetStudentsAboveAge 17
+
+CREATE PROCEDURE UPS_GetStudentsBelowAge @age INT
 AS
 SELECT * FROM Students
-WHERE @age > Age
+WHERE Age <= @age
 
-CREATE TRIGGER TR_InititalAdulthood ON Students
-AFTER INSERT
+EXEC UPS_GetStudentsBelowAge 20
+
+
+CREATE TRIGGER TR_AdulthoodSetter ON Students
+AFTER INSERT, UPDATE
 AS
 BEGIN
-	UPDATE Students
-	SET Adulthood = 1
-	WHERE (SELECT Age FROM inserted) > 17 AND Id = (SELECT Id FROM inserted)
+    UPDATE S
+    SET Adulthood = 1
+    FROM Students S
+    INNER JOIN inserted I 
+	ON S.Id = I.Id
+    WHERE I.Age >= 18
+
+    
+    UPDATE S
+    SET Adulthood = 0
+    FROM Students S
+    INNER JOIN inserted I
+	ON S.Id = I.Id
+    WHERE I.Age < 18
 END
+
+
+CREATE TRIGGER TR_StudentDeletedDataStorer ON Students
+AFTER DELETE
+AS 
+BEGIN
+	
+	INSERT INTO DeletedStudents (Name, Surname, GroupId)
+	SELECT Name, Surname, GroupId FROM deleted
+
+END
+
+
+CREATE TRIGGER TR_GroupDeletedDataStorer ON Groups
+AFTER DELETE
+AS 
+BEGIN
+	
+	INSERT INTO DeletedGroups (Name, AcademyId)
+	SELECT Name, AcademyId FROM deleted
+
+END
+
+
+
+INSERT INTO Academies (Name)
+VALUES 
+('Oxford Academy'),
+('Horizon Institute'),
+('Future Leaders Academy');
+
+INSERT INTO Groups (Name, AcademyId)
+VALUES 
+('Science Club', 1),
+('Art and Design', 1),
+('Business Studies', 2),
+('Music and Performance', 2),
+('Sports Training', 3);
+
+INSERT INTO Students (Name, Surname, Age, GroupId) 
+VALUES 
+('Daniel', 'Williams', 16, 1),
+('Sophia', 'Brown', 18, 2),
+('Ethan', 'Taylor', 20, 3),
+('Olivia', 'Martinez', 15, 4),
+('James', 'Anderson', 22, 5)
+
+TRUNCATE TABLE Students
